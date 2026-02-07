@@ -1,0 +1,445 @@
+---
+title: "INTERACTIVE EFFECTS OF MULTIPLE STRESSORS ACROSS BULL KELP’S (NEREOCYSTIS LUETKEANA, PHAEOPHYCEAE) LIFE-HISTORY"
+subtitle: "Assessing Gametophyte percent cover, density, and size"
+author: "Shirah Strock"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: 
+    toc: true
+    number_section: false
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: true
+    collapsed: true
+    number_section: false
+    theme: united
+---
+
+# Assessing Gametophyte Percent Cover
+
+## Models
+
+```{r}
+#view data distribution
+hist(gams$gam_percent_cover)
+
+#Gamma model was the best fit 
+gam_pc_lm <- glmmTMB(gam_percent_cover ~ salinity_treat * temp_treat + 
+                (1|days_post_release) + (1|replicate_num),
+                dispformula = ~ salinity_treat * temp_treat,
+              data = gams,
+              family = Gamma(link = "log"))
+summary(gam_pc_lm)
+
+
+#assessing model fit
+sim_resg1 <- simulateResiduals(fittedModel = gam_pc_lm, plot = TRUE)
+
+
+# Test for over/underdispersion
+testDispersion(sim_resg1)
+
+# Test for outliers
+testOutliers(sim_resg1)
+
+#check zero-inflation
+testZeroInflation(sim_resg1)
+
+plotResiduals(sim_resg1, 
+              form = gams$salinity_treat[!is.na(gams$gam_percent_cover)])
+
+plotResiduals(sim_resg1, 
+              form = gams$temp_treat[!is.na(gams$gam_percent_cover)])
+```
+
+## Calculating estimated marginal means
+
+```{r}
+#calculate estimated marginal means based on Gamma GLMM
+emmg1 <- emmeans(gam_pc_lm, ~ salinity_treat * temp_treat, 
+                type = "response") 
+emmg1
+
+
+
+emmg1_df <- as.data.frame(emmg1)
+
+
+
+# Pairwise comparisons with Tukey adjustment
+pairwise_emmg1 <- contrast(emmg1, method = "pairwise", adjust = "tukey")
+summary(pairwise_emmg1)
+
+# Compact letter display for grouping
+
+cld(pairwise_emmg1,
+    alpha=0.05,
+    Letters=letters,
+    adjust="tukey")  
+
+
+cld_lettersg1 <- cld(emmg1, alpha=0.05, Letters = letters, adjust = "tukey")
+summary(cld_lettersg1)
+
+# Convert to dataframe and merge
+emmg1_df <- as.data.frame(cld_lettersg1)
+emmg1_df
+
+#removing spaces from the compact letter display
+emmg1_df$.group <- trimws(emmg1_df$.group)
+```
+
+## Visualizations
+
+```{r}
+#plotting emms by treatment
+emm_gpc<- ggplot(emmg1_df, aes(x = salinity_treat, y = response,
+                               fill = temp_treat, group = temp_treat)) +
+  geom_bar(stat = "identity", position = position_dodge(0.95), 
+           aes(fill = temp_treat)) +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL),
+                width = 0.1, position = position_dodge(0.95)) +
+  geom_text(aes(label = .group, y = asymp.UCL+0.2, x = salinity_treat),
+            position = position_dodge(0.95), #including compact letter display
+            color = "black") +
+  scale_fill_manual(
+    values = c("amb" = "darkgrey", "inc" = "#505050"),
+    labels = c("amb" = "Ambient", "inc" = "Increased")) +
+  scale_x_discrete(labels = c("amb" = "Ambient", "dec" = "Decreased")) +
+  labs(x = "Salinity Treatment", 
+       y = "Gametophyte Percent Cover",
+       fill = "Temperature\nTreatment",
+       title = NULL) +
+  my_theme
+emm_gpc
+
+
+#additional plot with line showing the theoretical 'additive' interaction response as described in Crain et al. 2008
+emm_gpc2<- ggplot(emmg1_df, aes(x = salinity_treat, y = response,
+                               fill = temp_treat, group = temp_treat)) +
+  geom_bar(stat = "identity", position = position_dodge(0.95), 
+           aes(fill = temp_treat)) +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL),
+                width = 0.1, position = position_dodge(0.95)) +
+  geom_text(aes(label = .group, y = asymp.UCL+0.1, x = salinity_treat),
+            position = position_dodge(0.95),
+            color = "black") +
+  scale_fill_manual(
+    values = c("amb" = "darkolivegreen1", "inc" = "darkolivegreen"),
+    labels = c("amb" = "Ambient", "inc" = "Increased")) +
+  scale_x_discrete(labels = c("amb" = "Ambient", "dec" = "Decreased")) +
+  labs(x = "Salinity Treatment", 
+       y = "Gametophyte Percent Cover",
+       fill = "Temperature\nTreatment",
+       title = NULL) +
+  geom_segment(aes(x = 2, xend = 2.55, y = 1.203055),
+               linetype = "dashed",
+               color = "black",
+               linewidth = 1) +
+  my_theme
+emm_gpc2
+```
+
+# Assessing Gametophyte Density
+
+## Models
+
+```{r}
+#viewing data distribution
+hist(gams$gam_density)
+
+
+#linear model 
+gam_den_lm <- lmer(log_gam_den ~ salinity_treat * temp_treat +
+                      (1|days_post_release) + (1|replicate_num),
+                    data = gams,
+                    REML = TRUE)
+summary(gam_den_lm)
+
+
+#assessing model fit with DHARMa
+sim_resg2 <- simulateResiduals(fittedModel = gam_den_lm, plot = TRUE)
+
+
+# Test for over/underdispersion
+testDispersion(sim_resg2)
+
+# Test for outliers
+testOutliers(sim_resg2)
+
+#test for zero inflation
+testZeroInflation(sim_resg2)
+
+#plotting residuals 
+plotResiduals(sim_resg2, form = fitted(gam_den_lm))
+
+plot(gam_den_lm)
+```
+
+## Calculating estimated marginal means
+
+```{r}
+#calculate estimeated marginal means from lm
+emmg2 <- emmeans(gam_den_lm, ~ salinity_treat * temp_treat, 
+                 type = "response") 
+emmg2
+
+emmg2_df <- as.data.frame(emmg2)
+
+
+# Pairwise comparisons with Tukey adjustment
+pairwise_emm <- contrast(emmg2, method = "pairwise", adjust = "tukey")
+summary(pairwise_emm)
+
+# Compact letter display for grouping significant relationships
+cld_lettersg2 <- cld(emmg2, alpha = 0.05, Letters = letters, adjust = "tukey")
+cld_lettersg2
+# Convert to dataframe and merge
+emmg2_df <- as.data.frame(cld_lettersg2)
+emmg2_df
+
+#removing spaces from the compact letter display
+emmg2_df$.group <- trimws(emmg2_df$.group)
+```
+
+## Visualizations
+
+```{r}
+#plotting emms by treatment
+emm_gden<- ggplot(emmg2_df, aes(x = salinity_treat, y = emmean,
+                                fill = temp_treat)) +
+  geom_bar(stat = "identity", position = position_dodge(0.95), 
+           aes(fill = temp_treat)) +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL),
+                width = 0.2, position = position_dodge(0.95)) +
+  geom_text(aes(label = .group, y = asymp.UCL+0.2, x = salinity_treat),
+            position = position_dodge(0.95), color = "black") +
+  scale_fill_manual(
+    values = c("amb" = "darkgrey", "inc" = "#505050"),
+    labels = c("amb" = "Ambient", "inc" = "Increased")) +
+  scale_x_discrete(labels = c("amb" = "Ambient", "dec" = "Decreased")) +
+  labs(x = "Salinity Treatment", 
+       y = expression("Gametophyte Density (gams·mm"^-2*")"),
+       fill = "Temperature\nTreatment") +
+  my_theme
+emm_gden
+
+
+
+
+
+
+#additional plot with line showing the theoretical 'additive' interaction relationshiop (Crain et al. 2008)
+
+emm_gden2<- ggplot(emmg2_df, aes(x = salinity_treat, y = emmean,
+                                fill = temp_treat)) +
+  geom_bar(stat = "identity", position = position_dodge(0.95), 
+           aes(fill = temp_treat)) +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL),
+                width = 0.2, position = position_dodge(0.95)) +
+  geom_text(aes(label = .group, y = asymp.UCL+0.2, x = salinity_treat),
+            position = position_dodge(0.95), color = "black") +
+  scale_fill_manual(
+    values = c("amb" = "darkolivegreen1", "inc" = "darkolivegreen"),
+    labels = c("amb" = "Ambient", "inc" = "Increased")) +
+  scale_x_discrete(labels = c("amb" = "Ambient", "dec" = "Decreased")) +
+  labs(x = "Salinity Treatment", 
+       y = expression("Gametophyte Density (gams·mm"^-2*")"),
+       fill = "Temperature\nTreatment") +
+  geom_segment(aes(x = 2, xend = 2.55, y = 3.775111),
+               linetype = "dashed",
+               color = "black",
+               linewidth = 1) +
+  my_theme
+emm_gden2
+```
+
+# Assessing Gametophyte Size
+
+## Models
+
+```{r}
+#view data distribution 
+hist(gams$gam_size_um2)
+
+
+#GAMM model 
+gamm_log_size_lm <- gam(log_gam_size ~ salinity_treat * temp_treat +
+                  s(days_post_release, bs = "re") +
+                  s(replicate_num, bs = "re"),
+                data = gams)
+
+
+summary(gamm_log_size_lm)
+
+
+#check model fit
+gam.check(gamm_log_size_lm)
+```
+
+## Calculating estimated marginal means
+
+```{r}
+#calculate estimated marginal means based on GAMM model
+emmg3 <- emmeans(gamm_log_size_lm, ~ salinity_treat * temp_treat, 
+                 type = "response") 
+
+
+emmg3_df <- as.data.frame(emmg3)
+
+
+emmg3_df$response <- exp(emmg3_df$emmean)
+emmg3_df$lower.CL <- exp(emmg3_df$lower.CL)
+emmg3_df$upper.CL <- exp(emmg3_df$upper.CL)
+
+pairwise_contrasts <- contrast(emmg3, method = "pairwise")
+summary(pairwise_contrasts)
+
+# Back-transform the effect sizes (log differences) to response scale
+contrast_df <- as.data.frame(summary(pairwise_contrasts))
+contrast_df$ratio <- round(exp(contrast_df$estimate), 3)
+contrast_df
+emmg3_df
+
+
+#combining data 
+cld_df <- cld(emmg3, adjust = "tukey", Letters = letters)
+
+
+emmg3_df$Letters <- cld_df$.group
+
+#removing spaces from the compact letter display
+emmg3_df$Letters <- trimws(emmg3_df$Letters)
+```
+
+## Visualizations 
+
+```{r}
+#plotting emms by treatment 
+emm_gsiz<- ggplot(emmg3_df, aes(x = salinity_treat, y = response, 
+                     fill = temp_treat, group = temp_treat)) +
+  geom_bar(stat = "identity", position = position_dodge(0.95), 
+           aes(fill = temp_treat)) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL),
+                width = 0.2, position = position_dodge(0.95)) +
+  geom_text(aes(label = Letters, y = upper.CL+0.03, x = salinity_treat),
+            position = position_dodge(0.95),color = "black") +
+  scale_fill_manual(
+    values = c("amb" = "darkgrey", "inc" = "#505050"),
+    labels = c("amb" = "Ambient", "inc" = "Increased")) +
+  scale_x_discrete(labels = c("amb" = "Ambient", "dec" = "Decreased")) +
+  labs(x = "Salinity Treatment", 
+       y = expression("Gametophyte Size (μm"^2*")"),
+       fill = "Temperature\nTreatment",
+       title = NULL) +
+  my_theme
+emm_gsiz
+
+
+
+
+#additional plot with line indicating theoetical additive relationship (Crain et al. 2008)
+emm_gsiz2<- ggplot(emmg3_df, aes(x = salinity_treat, y = response, 
+                                fill = temp_treat, group = temp_treat)) +
+  geom_bar(stat = "identity", position = position_dodge(0.95), 
+           aes(fill = temp_treat)) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL),
+                width = 0.2, position = position_dodge(0.95)) +
+  geom_text(aes(label = Letters, y = upper.CL+0.03, x = salinity_treat),
+            position = position_dodge(0.95),color = "black") +
+  scale_fill_manual(
+    values = c("amb" = "darkolivegreen1", "inc" = "darkolivegreen"),
+    labels = c("amb" = "Ambient", "inc" = "Increased")) +
+  scale_x_discrete(labels = c("amb" = "Ambient", "dec" = "Decreased")) +
+  labs(x = "Salinity Treatment", 
+       y = expression("Gametophyte Size (μm"^2*")"),
+       fill = "Temperature\nTreatment",
+       title = NULL) +
+  geom_segment(aes(x = 2, xend = 2.55, y = 0.4885609),
+               linetype = "dashed",
+               color = "black",
+               linewidth =1) +
+  my_theme
+emm_gsiz2
+```
+
+# Combining All Gametophyte Plots 
+
+```{r}
+# 1. Extract the legend from one of the plots
+gemm_legend <- get_legend(
+  emm_gpc + theme(legend.position = "right"))
+
+# 2. Remove the legends from the three individual plots
+p1_emmg <- emm_gpc + theme(legend.position = "none",
+                              axis.title.y = element_text(size = 11))
+p2_emmg <- emm_gden + theme(legend.position = "none",
+                                    axis.title.y = element_text(size = 11))
+p3_emmg <- emm_gsiz + theme(legend.position = "none",
+                                 axis.title.y = element_text(size = 11))
+
+
+top_row_gemm <- plot_grid(p1_emmg, p2_emmg, labels = c("A", "B"), ncol = 2)
+bottom_row_gemm <- plot_grid(p3_emmg, gemm_legend, labels = "C", 
+                            label_x = 0, rel_widths = c(1, 1))
+
+
+gemm_plot <- plot_grid(top_row_gemm,
+                      bottom_row_gemm,
+                      ncol = 1,
+                      rel_heights = c(1, 1))
+gemm_plot
+
+#saving the figure to the figure_outputs folder 
+ggsave("figure2.jpg", plot = gemm_plot, width = 6, height = 7, 
+       dpi = 300, units = "in",
+       path = 'figure_outputs')
+
+#saving figure as eps file
+ggsave("Figure_2.eps", plot = gemm_plot, width = 6, height = 7, 
+       dpi = 600, units = "in",
+       path = 'figure_outputs')
+
+#saving figure as pdf
+ggsave("Figure_2.pdf", plot = gemm_plot, width = 6, height = 7, 
+       dpi = 600, units = "in",
+       path = 'figure_outputs')
+
+
+#combined gam plots with additive line####
+# 1. Extract the legend from one of the plots
+gemm2_legend <- get_legend(
+  emm_gpc2 + theme(legend.position = "right"))
+
+# 2. Remove the legends from the three individual plots
+p1_emmg2 <- emm_gpc2 + theme(legend.position = "none",
+                           axis.title.y = element_text(size = 11))
+p2_emmg2 <- emm_gden2 + theme(legend.position = "none",
+                            axis.title.y = element_text(size = 11))
+p3_emmg2 <- emm_gsiz2 + theme(legend.position = "none",
+                            axis.title.y = element_text(size = 11))
+
+
+top_row_gemm2 <- plot_grid(p1_emmg2, p2_emmg2, labels = c("A", "B"), ncol = 2)
+bottom_row_gemm2 <- plot_grid(p3_emmg2, gemm2_legend, labels = "C", 
+                             label_x = 0, rel_widths = c(1, 1))
+
+
+gemm_plot2 <- plot_grid(top_row_gemm2,
+                       bottom_row_gemm2,
+                       ncol = 1,
+                       rel_heights = c(1, 1))
+gemm_plot2
+
+#plots in one column 
+gemm_plot2_1col <- plot_grid(p1_emmg2, p2_emmg2, p3_emmg2, 
+                             ncol = 1,
+                             rel_heights = 1)
+
+gemm_plot2_1col
+
+ggsave("gam_emm2_1col.jpg", plot = gemm_plot2_1col, width = 4, 
+       height = 10, dpi = 300, units = "in",
+       path = 'figure_outputs')
+```
